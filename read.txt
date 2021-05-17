@@ -1,1 +1,5 @@
 aam 12 12 2
+add 12 38 903
+mul 23 1 8 89
+sfdsdfwe
+add 21

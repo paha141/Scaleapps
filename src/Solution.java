@@ -11,48 +11,80 @@ import java.io.*;
         * Если значение аргумента задано как "-", то это означает работу с консолью, иначе с файлом.
  **/
 
-public class Solution {
-    private static BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+public class Solution implements Closeable {
+    private final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+    private BufferedWriter writer;
 
     public static void main(String[] args) throws IOException {
-        writeMessage("Введите даныые в виде: \"test-app - -\" \n" +
+        Solution solution = new Solution();
+        solution.writeMessage("Введите даныые в виде: \"test-app - -\" \n" +
                 "Если данные необходимо брать из файла (и\\или загружать в файл), то вместо \"-\" введите путь файла");
-        String testApp = readLine();
+        String testApp = solution.readLine();
         while (!testApp.equals("exit")) {
             if (testApp.startsWith("test-app"))
                 break;
-            else writeMessage("Вы ввели неверные данные. Повторите попытку или введите \"exit\" для завершения");
-            testApp = readLine();
+            else solution.writeMessage("Вы ввели неверные данные. Повторите попытку или введите \"exit\" для завершения");
+            testApp = solution.readLine();
         }
 
         String[] split = testApp.split(" ", 3);
 
-        String arguments = readArguments(split[1]);
+        if (!split[2].equals("-")) solution.writer = new BufferedWriter(new FileWriter(split[2]));
+        if (split[1].equals("-")) solution.readFromConsole(solution.writer);
+        else solution.readFromFile(split[1], solution.writer);
 
-        if (split[2].equals("-"))
-            writeMessage("Ответ: " + getResult(arguments));
-        else writeToFile(split[2], getResult(arguments));
-        close();
+        solution.close();
     }
 
-    private static String readArguments(String filename) throws IOException {
-        if (filename.equals("-")) {
+    //чтение данных с консоли и запись результата
+    private void readFromConsole(Writer out) throws IOException {
             writeMessage("Введите тип оперции и перечислите аргументы, разделяя проблелом\n" +
                     "Список доступных операций:\n" +
                     "\t add - сумма всех аргументов, не менее двух\n" +
                     "\t mul - произведение всех аргументов, не менее двух\n" +
-                    "\t aam - сумма первых двух аргументов, умноженная на третий");
-            return readLine();
-        } else {
-            BufferedReader reader = new BufferedReader(new FileReader(filename));
-            String result = reader.readLine();
-            writeMessage(String.format("В файле %s строка: %s", filename, result));
-            reader.close();
-            return result;
+                    "\t aam - сумма первых двух аргументов, умноженная на третий\n" +
+                    "\t exit - для выхода из программы. Аргуметы перечислять не нужно");
+            String argument = readLine();
+
+            while (!argument.equals("exit")) {
+                try {
+                    int result = getResult(argument);
+                    writeResult(out, String.format("Для строки %s ответ: %d\n", argument, result));
+                } catch (WrongArgumentException e) {
+                    writeMessage(e.getMessage());
+                }
+                argument = readLine();
+            }
+    }
+
+    //чтение данных из файла и запись результата
+    private void readFromFile(String fileName, Writer out) throws IOException {
+        BufferedReader reader = new BufferedReader(new FileReader(fileName));
+
+        while (reader.ready()) {
+            String argument = reader.readLine();
+            writeMessage(String.format("В файле %s строка: %s", fileName, argument));
+            try {
+                int result = getResult(argument);
+                out.write(String.format("Для строки %s ответ: %d\n", argument, result));
+            } catch (WrongArgumentException e) {
+                writeMessage(e.getMessage());
+            }
+        }
+        reader.close();
+    }
+
+    //запись резульатата в файл или консоль
+    private void writeResult(Writer out, String result) throws IOException {
+        if (writer == null)
+            writeMessage(result);
+        else {
+            out.write(result);
         }
     }
 
-    private static int getResult(String argument) {
+    //получение результата
+    private static int getResult(String argument) throws WrongArgumentException {
         String[] splitArguments = argument.split(" ");
         int result;
         switch (splitArguments[0]) {
@@ -66,8 +98,7 @@ public class Solution {
                 result = addAndMul(getArguments(splitArguments));
                 break;
             default:
-                writeMessage("Вы ввели неверные данные");
-                throw new IllegalArgumentException();
+                throw new WrongArgumentException(splitArguments[0] + " - неподходящая операция");
         }
         return result;
     }
@@ -79,15 +110,9 @@ public class Solution {
         return result;
     }
 
-    private static void writeToFile(String fileName, int result) throws IOException {
-        BufferedWriter writer = new BufferedWriter(new FileWriter(fileName));
-        writer.write("Ответ: " + result);
-        writer.close();
-    }
-
-
     //методы выполняющие операции
-    private static int add(int... args) {
+    private static int add(int... args) throws WrongArgumentException {
+        if (args.length < 2) throw new WrongArgumentException("Недостаточно аргуметов");
         int result = 0;
         for (int arg : args) {
             result += arg;
@@ -95,7 +120,8 @@ public class Solution {
         return result;
     }
 
-    private static int mul(int... args) {
+    private static int mul(int... args) throws WrongArgumentException {
+        if (args.length < 2) throw new WrongArgumentException("Недостаточно аргуметов");
         int result = 1;
         for (int arg : args) {
             result *= arg;
@@ -108,15 +134,24 @@ public class Solution {
     }
 
     //методы для работы с консолью
-    private static void writeMessage(String message) {
+    private void writeMessage(String message) {
         System.out.println(message);
     }
 
-    private static String readLine() throws IOException {
+    private String readLine() throws IOException {
         return reader.readLine();
     }
 
-    public static void close() throws IOException {
+    @Override
+    public void close() throws IOException {
         reader.close();
+        if (writer != null)
+            writer.close();
+    }
+
+    private static class WrongArgumentException extends Exception {
+        public WrongArgumentException(String message) {
+            super(message);
+        }
     }
 }
